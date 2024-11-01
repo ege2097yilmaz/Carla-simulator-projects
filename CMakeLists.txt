@@ -27,16 +27,16 @@ set(carla_libs
 include_directories(
     include
     ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/third_party/boost/include
-    ${CMAKE_SOURCE_DIR}/libcarla-install/include
-    ${CMAKE_SOURCE_DIR}/libcarla-install/include/system/
+    ${CMAKE_SOURCE_DIR}/include/third_party/boost/include
+    ${CMAKE_SOURCE_DIR}/include/libcarla-install/include
+    ${CMAKE_SOURCE_DIR}/include/libcarla-install/include/system/
 )
 
 include_directories(${RPCLIB_INCLUDE_DIR})
 
 link_directories(
-    ${CMAKE_SOURCE_DIR}/libcarla-install/lib
-    ${CMAKE_SOURCE_DIR}/lib   
+    ${CMAKE_SOURCE_DIR}include/libcarla-install/lib
+    ${CMAKE_SOURCE_DIR}include/lib   
 )
 
 # Define the executable
