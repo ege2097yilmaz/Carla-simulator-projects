@@ -1,0 +1,61 @@
+# Use the official CARLA image (ubuntu 1804 base)
+FROM carlasim/carla:0.9.15
+
+# Switch to root user to install necessary packages
+USER root 
+
+
+# Add the missing NVIDIA GPG key
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub \
+    add-apt-repository ppa:ubuntu-toolchain-r/test
+
+# update nvidia GPT key
+RUN apt-get update || true
+
+# Install necessary tools for GUI forwarding (e.g., x11-apps for testing GUI)
+RUN apt-get install -y \
+    x11-apps \
+    software-properties-common \
+    mesa-utils \
+    vulkan-utils \
+    libvulkan1 \
+    clang-5.0 \
+    lld-5.0 \
+    g++-7 \
+    ninja-build \
+    python \
+    python-pip \
+    python3 \
+    python3-pip \
+    libboost-python-dev \
+    libxml2-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip2 install --user setuptools nose2 && pip3 install --user setuptools nose2
+
+# set defualt clang is clang10 for API
+RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-5.0/bin/clang++ 101 
+RUN update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-5.0/bin/clang 101
+
+# RUN git clone --depth=1 -b 4.19 https://github.com/EpicGames/UnrealEngine.git ~/UnrealEngine_4.19 \
+#     && cd ~/UnrealEngine_4.19 \
+#     && ./Setup.sh \
+#     && ./GenerateProjectFiles.sh \
+#     && make
+
+# RUN export UE4_ROOT=~/UnrealEngine_4.19
+# RUN make launch 
+
+# Switch back to the carla user
+USER carla
+
+# Set the working directory to /home/carla
+WORKDIR /home/carla
+
+# Set environment variables required for GUI display forwarding
+ENV DISPLAY=:0
+ENV QT_X11_NO_MITSHM=1
+
+# Run CARLA simulator on container start
+CMD ["/bin/bash"]

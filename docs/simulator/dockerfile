@@ -1,0 +1,65 @@
+# Use the official CARLA image (ubuntu 1804 base)
+FROM carlasim/carla:0.9.15
+
+# Add the missing NVIDIA GPG key
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub \
+    apt-add-repository "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic main"
+
+# update nvidia GPT key
+RUN apt-get update || true
+
+# Install necessary tools for GUI forwarding (e.g., x11-apps for testing GUI)
+RUN apt-get install -y \
+    x11-apps \
+    software-properties-common \
+    mesa-utils \
+    vulkan-utils \
+    libvulkan1 \
+    python \
+    ninja-build \
+    build-essential \
+    g++ \
+    git \
+    wget \
+    lld-8 \
+    clang-8 \
+    cmake \
+    python \
+    python-pip \
+    python-dev \
+    python3-dev \
+    python3-pip \
+    libpng-dev \
+    libtiff5-dev \
+    libjpeg-dev \
+    tzdata \
+    xdg-user-dirs \
+    sed \
+    curl \
+    unzip \
+    autoconf \
+    libtool \
+    rsync \
+    libxml2-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# set defualt clang is clang10 for API
+RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-8/bin/clang++ 180 \
+    && update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-8/bin/clang 180
+
+# Switch back to the carla user
+USER carla
+
+# Set the working directory to /home/carla
+WORKDIR /home/carla
+
+# Expose CARLA Simulator's default port
+EXPOSE 2000-2002
+
+# Set environment variables required for GUI display forwarding
+ENV DISPLAY=:0
+ENV QT_X11_NO_MITSHM=1
+
+# Run CARLA simulator on container start
+CMD ["/bin/bash"]
