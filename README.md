@@ -10,6 +10,7 @@ This CMake package integrates `libcarla`, `rpclib`, and custom control algorithm
 - **scripts**: A collection of control algorithms and utility scripts. Notable algorithms include:
   - **PID Controller**: A classical control algorithm for managing vehicle dynamics.
   - **MPC Controller**: A Model Predictive Controller for optimizing vehicle performance over a prediction horizon.
+  - **Cruise control**: A controller to follow lead car in simulation.
 
 ## Installation
 
@@ -28,3 +29,6 @@ To build and install this package, follow these steps:
 # Usage
 * libcarla and rpclib in the include directory are set up to work seamlessly with CARLA simulations.
 * The control algorithms in the scripts folder can be run or modified to experiment with various vehicle control strategies.
+
+### PID controller to follow path
+![Watch Video](videos/PID.gif)
