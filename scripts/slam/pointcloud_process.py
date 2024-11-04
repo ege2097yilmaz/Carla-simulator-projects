@@ -38,18 +38,73 @@ class PointCloudData:
         points = np.frombuffer(data.raw_data, dtype=np.float32).reshape(-1, 4)
         self.point_cloud = points
 
-    def get_open3d_point_cloud(self):
-        # Convert the point cloud to Open3D format for visualization
+    # def get_open3d_point_cloud(self, distance_threshold):
+    #     # Convert the point cloud to Open3D format for visualization
+    #     if len(self.point_cloud) == 0:
+    #         return None
+
+    #     # Extract x, y, z coordinates
+    #     points = self.point_cloud[:, :3]
+    #     point_cloud_o3d = o3d.geometry.PointCloud()
+    #     point_cloud_o3d.points = o3d.utility.Vector3dVector(points)
+    #     return point_cloud_o3d
+        
+
+    def get_open3d_point_cloud(self, distance_threshold):
+        # Check if the point cloud is empty
         if len(self.point_cloud) == 0:
             return None
 
         # Extract x, y, z coordinates
         points = self.point_cloud[:, :3]
+
+        # Filter the points based on the distance threshold in the z-axis
+        # for ground segmentation
+        filtered_points = points[points[:, 2] > distance_threshold]
+
+        # Create Open3D point cloud with the filtered points
         point_cloud_o3d = o3d.geometry.PointCloud()
-        point_cloud_o3d.points = o3d.utility.Vector3dVector(points)
+        point_cloud_o3d.points = o3d.utility.Vector3dVector(filtered_points)
+
         return point_cloud_o3d
 
     def destroy_sensor(self):
         if self.lidar_sensor is not None:
             self.lidar_sensor.stop()
             self.lidar_sensor.destroy()
+
+    
+    def visualize_pose_in_carla(self, world, pose, color=(255, 0, 0)):
+        """
+        Visualizes a pose in CARLA by adding an arrow marker at the pose location.
+        Args:
+            world (carla.World): The CARLA world object.
+            pose (numpy.ndarray): The pose as a 4x4 transformation matrix.
+            color (tuple): RGB color of the arrow.
+        """
+        location = carla.Location(x=pose[0, 3], y=pose[1, 3], z=pose[2, 3] + 3)
+        rotation = carla.Rotation(
+            pitch=np.rad2deg(np.arcsin(pose[2, 1])),
+            yaw=np.rad2deg(np.arctan2(pose[1, 0], pose[0, 0])),
+            roll=np.rad2deg(np.arctan2(pose[2, 0], pose[2, 2]))
+        )
+
+        # world.debug.draw_arrow(
+        #     begin=location,
+        #     end=carla.Location(
+        #         x=pose[0, 3] + 2 * pose[0, 0],
+        #         y=pose[1, 3] + 2 * pose[1, 0],
+        #         z=pose[2, 3] + 2 * pose[2, 0] + 3
+        #     ),
+        #     thickness=0.025,
+        #     arrow_size=0.2,
+        #     color=carla.Color(*color),
+        #     life_time=0.5
+        # )
+
+        world.debug.draw_point(
+            location=location,
+            size=0.1,
+            color=carla.Color(*color),
+            life_time=0.5
+        )

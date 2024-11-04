@@ -4,7 +4,10 @@ from pointcloud_process import PointCloudData
 from utility import *
 import carla, time
 from slam import SLAM
-import numpy as np
+from collections import deque
+
+# Set the rolling window size
+pose_history = deque(maxlen=10)
 
 def main():
     # Initialize CARLA client and load the world
@@ -54,6 +57,10 @@ def main2():
     spawn_point = world.get_map().get_spawn_points()[0]
     vehicle = world.spawn_actor(vehicle_bp, spawn_point)
 
+    settings = world.get_settings()
+    settings.no_rendering_mode = False
+    world.apply_settings(settings)
+
     # Enable autopilot to make the vehicle move autonomously
     vehicle.set_autopilot(True)
 
@@ -69,18 +76,28 @@ def main2():
     # initialize SLAM class
     slam_system = SLAM()
 
+    slam_system.set_initial_point(location.x, location.y)
+
     file_index = 0
 
     try:
         while True:
             # Retrieve the first frame of point cloud data from CARLA
-            points_frame_1 = point_cloud_data.get_open3d_point_cloud()
+            points_frame_1 = point_cloud_data.get_open3d_point_cloud(0.1)
 
             if points_frame_1 is not None:
                 world.tick()
 
                 # todo process the frames and apply slam
-                slam_system.process_frame(points_frame_1)
+                transform = vehicle.get_transform()
+                slam_system.build_graph(points_frame_1, transform.rotation.yaw)
+
+                estimated_poses = slam_system.get_estimated_poses()
+                for pose in estimated_poses:
+                    pose_history.append(pose)
+
+                for pose in pose_history:
+                    point_cloud_data.visualize_pose_in_carla(world, pose)
 
 
                 # to save pcd files
