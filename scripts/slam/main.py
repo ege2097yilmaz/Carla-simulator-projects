@@ -59,6 +59,7 @@ def main():
 
                     transform = vehicle.get_transform()
                     slam_system.build_graph(points_frame_1, transform.rotation.yaw)
+                    slam_system.optimize_graph()
 
                     # visualize keypoints
                     keypoints = slam_system.get_keypoints(transform.location.x, transform.location.y, transform.rotation.yaw)
@@ -70,9 +71,9 @@ def main():
                     visualize_pose_graph_in_carla(pose_graph, world, location.x, location.y)
 
                     # visualize visual odometry points
-                    estimated_poses = slam_system.get_estimated_poses()
-                    for pose in estimated_poses:
-                        pose_history.append(pose)
+                    # estimated_poses = slam_system.get_estimated_poses()
+                    # for pose in estimated_poses:
+                    #     pose_history.append(pose)
 
                     for pose in pose_history:
                         point_cloud_data.visualize_pose_in_carla(world, pose)

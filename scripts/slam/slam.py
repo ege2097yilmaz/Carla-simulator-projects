@@ -3,6 +3,7 @@ import open3d as o3d
 from sklearn.neighbors import KDTree
 import networkx as nx
 from utility import *
+import gtsam
 
 class SLAM:
     def __init__(self):
@@ -38,6 +39,16 @@ class SLAM:
             point[1] = rotated_point[1] + vehicle_y
 
         return self.vis_keypoints
+    
+    
+    def get_estimated_poses(self):
+        """
+        Returns the list of estimated poses.
+        Returns:
+            List[numpy.ndarray]: A list of 4x4 transformation matrices representing the poses.
+        """
+        return self.estimated_poses
+    
     
     def get_pose_graph(self):
         return self.pose_graph
@@ -409,7 +420,7 @@ class SLAM:
             icp_result = o3d.pipelines.registration.registration_icp(
                 source=current_frame,
                 target=previous_frame,
-                max_correspondence_distance=2.0,
+                max_correspondence_distance=20.0,
                 init=np.eye(4),
                 estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
             )
@@ -419,12 +430,52 @@ class SLAM:
                 self.pose_graph.add_edge(self.node_index, i, transformation=loop_closure_transformation)
                 print(f"Loop closure detected and edge added between node {self.node_index} and node {i}.")
 
-    
-    def get_estimated_poses(self):
+    def optimize_graph(self):
         """
-        Returns the list of estimated poses.
-        Returns:
-            List[numpy.ndarray]: A list of 4x4 transformation matrices representing the poses.
+        Optimizes the pose graph to minimize the overall error from all constraints (edges) using GTSAM,
+        without considering the z-direction.
         """
-        return self.estimated_poses
-    
+        graph = gtsam.NonlinearFactorGraph()
+        initial_estimate = gtsam.Values()
+
+        # Add all nodes (poses) to the graph
+        for node_index in self.pose_graph.nodes:
+            pose = self.pose_graph.nodes[node_index]['pose']
+            translation = np.copy(pose[:3, 3])  
+            translation[2] = 0 
+            rotation = pose[:3, :3]
+            gtsam_pose = gtsam.Pose3(gtsam.Rot3(rotation), gtsam.Point3(translation[0], translation[1], 0))
+            initial_estimate.insert(node_index, gtsam_pose)
+
+            # Add a prior factor to the first pose to anchor the graph
+            if node_index == 0:
+                prior_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6) * 1e-6)
+                graph.add(gtsam.PriorFactorPose3(node_index, gtsam_pose, prior_model))
+
+        # Add all edges (relative transformations) to the graph
+        noise_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6))  # Adjust noise model as needed
+        for edge in self.pose_graph.edges:
+            source, target = edge
+            relative_transformation = self.pose_graph.edges[edge]['transformation']
+            translation = np.copy(relative_transformation[:3, 3])  
+            translation[2] = 0
+            rotation = relative_transformation[:3, :3]
+            gtsam_relative_pose = gtsam.Pose3(gtsam.Rot3(rotation), gtsam.Point3(translation[0], translation[1], 0))
+            graph.add(gtsam.BetweenFactorPose3(source, target, gtsam_relative_pose, noise_model))
+
+        # Optimize the graph
+        optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initial_estimate)
+        result = optimizer.optimize()
+
+        # Update the poses in the graph with the optimized values
+        for node_index in self.pose_graph.nodes:
+            optimized_pose = result.atPose3(node_index)
+            self.pose_graph.nodes[node_index]['pose'] = optimized_pose.matrix()
+
+        initial_error = graph.error(initial_estimate)
+        final_error = graph.error(result)
+
+        print("Initial Error:", initial_error)
+        print("Final Error:", final_error)
+
+        print("Graph optimization complete.")
