@@ -17,7 +17,9 @@ class SLAM:
         self.vis_keypoints = []
 
         self.cumulative_x_translation = 0 
-        self.cumulative_y_translation = 0 
+        self.cumulative_y_translation = 0
+
+        self.loop_closure_distance_threshold = 5.0  # Threshold in meters for loop closure
 
     
     def get_keypoints(self, vehicle_x, vehicle_y, vehicle_yaw):
@@ -79,7 +81,7 @@ class SLAM:
         """
         if method == 'corner_and_plane':
             # Extract corner and plane features using PCA
-            keypoints = self._extract_corner_and_plane_features(scan, 1e-12, 0.1) # deprecated function 1e-15, 0.9
+            keypoints = self._extract_corner_and_plane_features(scan, 1e-15, 0.2) # deprecated function 1e-15, 0.9
             # keypoints = self._extract_features(scan)
             self.vis_keypoints = keypoints
         elif method == 'uniform':
@@ -279,6 +281,9 @@ class SLAM:
 
             self.add_pose_to_graph(relative_transformation)
 
+            # Perform loop closure detection
+            self.detect_and_add_loop_closure(points_frame)
+
         # Increment the node index
         self.node_index += 1
 
@@ -377,6 +382,43 @@ class SLAM:
         # print(f"y translation: {y_translation}")
 
         return relative_transformation
+    
+    # TODO include place recognition algorithms like Scan Context or using geometric consistency checks with previously visited areas
+    def detect_and_add_loop_closure(self, current_frame):
+        """
+        Detects loop closure by comparing the current scan to earlier scans and adds an edge if a match is found.
+        Args:
+            current_frame (o3d.geometry.PointCloud): The current point cloud frame.
+        """
+        current_position = self.current_pose[:3, 3]  # Extract the translation component of the current pose
+
+        for i in range(self.node_index - 10):  # Skip the most recent scans to avoid redundant matching
+            previous_pose = self.pose_graph.nodes[i]['pose']
+            previous_position = previous_pose[:3, 3]  
+
+            # Compute the Euclidean distance between the current and previous positions
+            distance = np.linalg.norm(current_position - previous_position)
+            if distance > self.loop_closure_distance_threshold:
+                continue  # Skip if the distance is greater than the threshold
+
+            previous_frame_np = self.lidar_scans[i]
+            previous_frame = o3d.geometry.PointCloud()
+            previous_frame.points = o3d.utility.Vector3dVector(previous_frame_np)
+
+            # Use ICP to check for a match
+            icp_result = o3d.pipelines.registration.registration_icp(
+                source=current_frame,
+                target=previous_frame,
+                max_correspondence_distance=2.0,
+                init=np.eye(4),
+                estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
+            )
+
+            if icp_result.fitness > 0.9:  # If ICP fitness is high enough, we have a loop closure
+                loop_closure_transformation = icp_result.transformation
+                self.pose_graph.add_edge(self.node_index, i, transformation=loop_closure_transformation)
+                print(f"Loop closure detected and edge added between node {self.node_index} and node {i}.")
+
     
     def get_estimated_poses(self):
         """

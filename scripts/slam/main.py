@@ -9,42 +9,8 @@ from collections import deque
 # Set the rolling window size
 pose_history = deque(maxlen=10)
 
+
 def main():
-    # Initialize CARLA client and load the world
-    client = carla.Client('localhost', 2000)
-    client.set_timeout(10.0)
-    world = client.get_world()
-
-    # Spawn a vehicle to attach the sensor to
-    blueprint_library = world.get_blueprint_library()
-    vehicle_bp = blueprint_library.filter('vehicle.*')[0]
-    spawn_point = world.get_map().get_spawn_points()[0]
-    vehicle = world.spawn_actor(vehicle_bp, spawn_point)
-
-    # Enable autopilot to make the vehicle move autonomously
-    vehicle.set_autopilot(True)
-
-    # Initialize PointCloudData and set up the LIDAR sensor
-    point_cloud_data = PointCloudData()    
-
-    file_index = 0
-    start_time = time.time()
-    try:
-        for _ in range(100):
-            point_cloud_data.setup_lidar_sensor(vehicle)
-            current_time = time.time()
-            
-            # to save pcd files
-            # save_point_cloud_data(point_cloud_data, start_time, current_time, file_index, output_directory="point_cloud_data")
-
-            world.tick()
-            file_index += 1
-    finally:
-        # Cleanup
-        point_cloud_data.destroy_sensor()
-        vehicle.destroy()
-
-def main2():
     # Initialize CARLA client and load the world
     client = carla.Client('localhost', 2000)
     client.set_timeout(10.0)
@@ -94,13 +60,16 @@ def main2():
                     transform = vehicle.get_transform()
                     slam_system.build_graph(points_frame_1, transform.rotation.yaw)
 
+                    # visualize keypoints
                     keypoints = slam_system.get_keypoints(transform.location.x, transform.location.y, transform.rotation.yaw)
                     visualize_keypoints_in_carla(client, keypoints)
                     points_frame_1 = None
 
-                    pose_graph = slam_system.get_pose_graph()
+                    # visualize pose grah
+                    pose_graph = slam_system.get_pose_graph() 
                     visualize_pose_graph_in_carla(pose_graph, world, location.x, location.y)
 
+                    # visualize visual odometry points
                     estimated_poses = slam_system.get_estimated_poses()
                     for pose in estimated_poses:
                         pose_history.append(pose)
@@ -121,4 +90,4 @@ def main2():
         vehicle.destroy()
 
 if __name__ == '__main__':
-    main2()
+    main()
