@@ -1,5 +1,5 @@
 import open3d as o3d
-import os
+import os, carla
 import matplotlib.pyplot as plt
 
 def save_point_cloud_data(point_cloud_data, file_index, output_directory="point_cloud_data"):
@@ -67,4 +67,21 @@ def visualize_keypoints(scan, keypoints):
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     ax.legend()
-    plt.show()
+    # plt.show()
+
+
+def visualize_keypoints_in_carla(client, keypoints, life_time=5.0):
+    """
+    Visualizes keypoints in CARLA using the DebugHelper.
+    
+    Args:
+        client (carla.Client): CARLA client instance.
+        keypoints (np.ndarray): Extracted keypoints as a numpy array of shape (N, 3).
+        life_time (float): How long the keypoints should be visible in seconds.
+    """
+    world = client.get_world()
+    debug = world.debug
+
+    for point in keypoints:
+        location = carla.Location(x=point[0], y=point[1], z=point[2])
+        debug.draw_point(location, size=0.05, color=carla.Color(0, 0, 255), life_time=life_time)

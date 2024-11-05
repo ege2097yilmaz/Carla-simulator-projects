@@ -14,10 +14,28 @@ class SLAM:
         self.pose_graph = nx.DiGraph()  
         self.current_pose = np.eye(4) 
         self.node_index = 0
+        self.vis_keypoints = []
 
         self.cumulative_x_translation = 0 
         self.cumulative_y_translation = 0 
 
+    
+    def get_keypoints(self, vehicle_x, vehicle_y, vehicle_yaw):
+        yaw_rad = np.radians(vehicle_yaw + 360)
+        rotation_matrix = np.array([
+            [np.cos(yaw_rad), -np.sin(yaw_rad)],
+            [np.sin(yaw_rad), np.cos(yaw_rad)]
+        ])
+
+        for point in self.vis_keypoints:
+            # Apply the rotation matrix to the (x, y) coordinates
+            rotated_point = np.dot(rotation_matrix, np.array([point[0], point[1]]))
+            
+            # Update the point with the rotated and translated coordinates
+            point[0] = rotated_point[0] + vehicle_x
+            point[1] = rotated_point[1] + vehicle_y
+
+        return self.vis_keypoints
     
     def set_initial_point(self, x, y):
         """
@@ -58,8 +76,9 @@ class SLAM:
         """
         if method == 'corner_and_plane':
             # Extract corner and plane features using PCA
-            # keypoints = self._extract_corner_and_plane_features(scan, 1e-15, 0.25) # deprecated function
-            keypoints = self._extract_features(scan)
+            keypoints = self._extract_corner_and_plane_features(scan, 1e-12, 0.5) # deprecated function 1e-15, 0.9
+            # keypoints = self._extract_features(scan)
+            self.vis_keypoints = keypoints
         elif method == 'uniform':
             # Uniform sampling of keypoints
             keypoints = self._uniform_sampling(scan)
@@ -118,7 +137,6 @@ class SLAM:
         # Convert keypoints list to a numpy array
         keypoints = np.array(keypoints)
 
-        # Handle the case where keypoints might be empty
         if keypoints.size == 0:
             keypoints = np.asarray(plane_cloud.points)
         else:
@@ -230,8 +248,8 @@ class SLAM:
         points_np = np.asarray(points_frame.points)
         keypoints = self.extract_keypoints(points_np, method='corner_and_plane')
 
-        if(keypoints is not None):
-            visualize_keypoints(points_np, keypoints) # to visualize scans and keypoints
+        # if(keypoints is not None):
+        #     visualize_keypoints(points_np, keypoints) # to visualize scans and keypoints
 
         # Store the current scan and keypoints
         self.lidar_scans.append(points_np)

@@ -106,5 +106,5 @@ class PointCloudData:
             location=location,
             size=0.1,
             color=carla.Color(*color),
-            life_time=0.5
+            life_time=2.0
         )

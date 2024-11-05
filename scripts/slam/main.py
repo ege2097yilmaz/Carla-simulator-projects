@@ -85,25 +85,32 @@ def main2():
         while True:
             # Retrieve the first frame of point cloud data from CARLA
             points_frame_1 = point_cloud_data.get_open3d_point_cloud(-1.0)
-
+            
             if points_frame_1 is not None:
-                world.tick()
+                # print(len(points_frame_1.points))
+                if len(points_frame_1.points) >= 2400:
+                    world.tick()
 
-                # todo process the frames and apply slam
-                transform = vehicle.get_transform()
-                slam_system.build_graph(points_frame_1, transform.rotation.yaw)
+                    transform = vehicle.get_transform()
+                    slam_system.build_graph(points_frame_1, transform.rotation.yaw)
 
-                estimated_poses = slam_system.get_estimated_poses()
-                for pose in estimated_poses:
-                    pose_history.append(pose)
+                    keypoints = slam_system.get_keypoints(transform.location.x, transform.location.y, transform.rotation.yaw)
+                    visualize_keypoints_in_carla(client, keypoints)
+                    points_frame_1 = None
 
-                for pose in pose_history:
-                    point_cloud_data.visualize_pose_in_carla(world, pose)
+                    estimated_poses = slam_system.get_estimated_poses()
+                    for pose in estimated_poses:
+                        pose_history.append(pose)
+
+                    for pose in pose_history:
+                        point_cloud_data.visualize_pose_in_carla(world, pose)
 
 
-                # to save pcd files
-                # save_point_cloud_data(point_cloud_data, file_index, output_directory="point_cloud_data")
-                # file_index += 1
+                    # to save pcd files
+                    # save_point_cloud_data(point_cloud_data, file_index, output_directory="point_cloud_data")
+                    # file_index += 1
+            
+            points_frame_1 = None
 
     finally:
         # Cleanup
