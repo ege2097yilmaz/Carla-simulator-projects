@@ -21,10 +21,10 @@ class PointCloudData:
 
         # Set LIDAR sensor attributes
         lidar_bp = blueprint_library.find('sensor.lidar.ray_cast')
-        lidar_bp.set_attribute('range', '50.0')
-        lidar_bp.set_attribute('rotation_frequency', '90')
+        lidar_bp.set_attribute('range', '100.0')
+        lidar_bp.set_attribute('rotation_frequency', '180')
         lidar_bp.set_attribute('channels', '128')
-        lidar_bp.set_attribute('points_per_second', '560000')
+        lidar_bp.set_attribute('points_per_second', '1560000')
 
         # Create the LIDAR sensor and attach it to the vehicle
         lidar_transform = carla.Transform(carla.Location(x=0, z=2.5))
@@ -82,7 +82,7 @@ class PointCloudData:
             pose (numpy.ndarray): The pose as a 4x4 transformation matrix.
             color (tuple): RGB color of the arrow.
         """
-        location = carla.Location(x=pose[0, 3], y=pose[1, 3], z=pose[2, 3] + 3)
+        location = carla.Location(x=pose[0, 3], y=pose[1, 3], z=pose[2, 3] + 1)
         rotation = carla.Rotation(
             pitch=np.rad2deg(np.arcsin(pose[2, 1])),
             yaw=np.rad2deg(np.arctan2(pose[1, 0], pose[0, 0])),

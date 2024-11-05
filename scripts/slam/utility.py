@@ -9,7 +9,7 @@ def save_point_cloud_data(point_cloud_data, file_index, output_directory="point_
     pcd = o3d.geometry.PointCloud()
     
 
-    new_pcd = point_cloud_data.get_open3d_point_cloud(0.1)
+    new_pcd = point_cloud_data.get_open3d_point_cloud(-1.0)
     if new_pcd is not None:
         pcd.points = new_pcd.points
 

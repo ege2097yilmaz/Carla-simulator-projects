@@ -58,8 +58,8 @@ class SLAM:
         """
         if method == 'corner_and_plane':
             # Extract corner and plane features using PCA
-            keypoints = self._extract_corner_and_plane_features(scan, 1e-15, 0.6)
-            # keypoints = self._extract_features(scan)
+            # keypoints = self._extract_corner_and_plane_features(scan, 1e-15, 0.25) # deprecated function
+            keypoints = self._extract_features(scan)
         elif method == 'uniform':
             # Uniform sampling of keypoints
             keypoints = self._uniform_sampling(scan)
@@ -70,13 +70,12 @@ class SLAM:
     
     def _extract_features(self, scan):
         """
-        Extract feature using point cloud scan
+        Extract features using point cloud scan.
         Args:
             scan (np.ndarray): A numpy array of shape (N, 3) representing the point cloud scan.
         Returns:
             keypoints (np.ndarray): Keypoints representing corners and planes.
         """
-
         # Convert the numpy array to an Open3D point cloud
         point_cloud = o3d.geometry.PointCloud()
         point_cloud.points = o3d.utility.Vector3dVector(scan)
@@ -91,12 +90,40 @@ class SLAM:
         plane_cloud = point_cloud.select_by_index(inliers)
         non_plane_cloud = point_cloud.select_by_index(inliers, invert=True)
 
-        # Further feature extraction can be done on `non_plane_cloud` for corners
-        # Here, you can analyze curvature or use a keypoint detection algorithm
-        # For simplicity, we'll just return the points from the plane and non-plane as keypoints
-        
-        keypoints = np.asarray(plane_cloud.points)
-        
+        # Analyze non-plane points for corner features
+        # Using the concept of curvature to detect keypoints
+        non_plane_points = np.asarray(non_plane_cloud.points)
+        keypoints = []
+
+        # Loop through each point in the non-plane cloud to calculate curvature
+        kdtree = o3d.geometry.KDTreeFlann(non_plane_cloud)
+        for i in range(len(non_plane_points)):
+            # Find the neighbors within a radius
+            [_, idx, _] = kdtree.search_radius_vector_3d(non_plane_points[i], 0.1)
+            if len(idx) < 5:
+                continue
+            
+            # Compute the covariance matrix of the neighborhood
+            neighbors = np.asarray(non_plane_cloud.points)[idx, :]
+            covariance_matrix = np.cov(neighbors, rowvar=False)
+            
+            # Compute eigenvalues to analyze curvature
+            eigenvalues = np.linalg.eigvalsh(covariance_matrix)
+            curvature = eigenvalues[0] / np.sum(eigenvalues)
+            
+            # Use a threshold to detect keypoints based on curvature
+            if curvature > 0.1:
+                keypoints.append(non_plane_points[i])
+
+        # Convert keypoints list to a numpy array
+        keypoints = np.array(keypoints)
+
+        # Handle the case where keypoints might be empty
+        if keypoints.size == 0:
+            keypoints = np.asarray(plane_cloud.points)
+        else:
+            keypoints = np.vstack((np.asarray(plane_cloud.points), keypoints))
+
         return keypoints
     
 
@@ -203,8 +230,8 @@ class SLAM:
         points_np = np.asarray(points_frame.points)
         keypoints = self.extract_keypoints(points_np, method='corner_and_plane')
 
-        # if(keypoints is not None):
-        #     visualize_keypoints(points_np, keypoints) # to visualize scans and keypoints
+        if(keypoints is not None):
+            visualize_keypoints(points_np, keypoints) # to visualize scans and keypoints
 
         # Store the current scan and keypoints
         self.lidar_scans.append(points_np)
@@ -292,13 +319,30 @@ class SLAM:
         previous_frame.points = o3d.utility.Vector3dVector(previous_frame_np)
 
         # Apply ICP to find the transformation between the previous and current frames
+
+        # point2point
         icp_result = o3d.pipelines.registration.registration_icp(
             source=current_frame,
             target=previous_frame,
-            max_correspondence_distance=15.0, 
-            init=np.eye(4),  # Use a 4x4 identity matrix from NumPy
+            max_correspondence_distance=5.0, 
+            init=np.eye(4),  
             estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
         )
+
+        # point2plane
+        # current_frame.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+        # previous_frame.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+
+        # icp_result = o3d.pipelines.registration.registration_icp(
+        #     source=current_frame,
+        #     target=previous_frame,
+        #     max_correspondence_distance=5.0, 
+        #     init=np.eye(4),
+        #     estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPlane()
+        # )
+
+        print("Fitness score:", icp_result.fitness)
+        print("Inlier RMSE:", icp_result.inlier_rmse)
 
         # Extract the transformation matrix from the ICP result
         relative_transformation = icp_result.transformation

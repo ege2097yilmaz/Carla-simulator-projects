@@ -57,6 +57,7 @@ def main2():
     spawn_point = world.get_map().get_spawn_points()[0]
     vehicle = world.spawn_actor(vehicle_bp, spawn_point)
 
+    # setting for render mode
     settings = world.get_settings()
     settings.no_rendering_mode = False
     world.apply_settings(settings)
@@ -83,7 +84,7 @@ def main2():
     try:
         while True:
             # Retrieve the first frame of point cloud data from CARLA
-            points_frame_1 = point_cloud_data.get_open3d_point_cloud(0.1)
+            points_frame_1 = point_cloud_data.get_open3d_point_cloud(-1.0)
 
             if points_frame_1 is not None:
                 world.tick()
