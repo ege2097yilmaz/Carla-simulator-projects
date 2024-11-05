@@ -98,6 +98,9 @@ def main2():
                     visualize_keypoints_in_carla(client, keypoints)
                     points_frame_1 = None
 
+                    pose_graph = slam_system.get_pose_graph()
+                    visualize_pose_graph_in_carla(pose_graph, world, location.x, location.y)
+
                     estimated_poses = slam_system.get_estimated_poses()
                     for pose in estimated_poses:
                         pose_history.append(pose)

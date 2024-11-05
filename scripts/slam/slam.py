@@ -37,6 +37,9 @@ class SLAM:
 
         return self.vis_keypoints
     
+    def get_pose_graph(self):
+        return self.pose_graph
+    
     def set_initial_point(self, x, y):
         """
         Sets the initial point and initializes the cumulative x and y translations.
@@ -76,7 +79,7 @@ class SLAM:
         """
         if method == 'corner_and_plane':
             # Extract corner and plane features using PCA
-            keypoints = self._extract_corner_and_plane_features(scan, 1e-12, 0.5) # deprecated function 1e-15, 0.9
+            keypoints = self._extract_corner_and_plane_features(scan, 1e-12, 0.1) # deprecated function 1e-15, 0.9
             # keypoints = self._extract_features(scan)
             self.vis_keypoints = keypoints
         elif method == 'uniform':
@@ -228,6 +231,8 @@ class SLAM:
         # Compute the new pose by multiplying the current pose with the relative transformation
         new_pose = np.dot(self.current_pose, relative_transformation)
 
+        new_pose[2, 3] = self.current_pose[2, 3]  # Keep the z position unchanged
+
         self.current_pose = new_pose
 
         node_index = len(self.pose_graph.nodes)
@@ -318,9 +323,8 @@ class SLAM:
         # print(cumulative_transformation)
 
         return cumulative_transformation
-    
 
-    
+
     def estimate_relative_transformation(self, current_frame):
         """
         Estimates the relative transformation between the current and previous LiDAR scans using ICP.

@@ -67,10 +67,10 @@ def visualize_keypoints(scan, keypoints):
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     ax.legend()
-    # plt.show()
+    plt.show()
 
 
-def visualize_keypoints_in_carla(client, keypoints, life_time=5.0):
+def visualize_keypoints_in_carla(client, keypoints, life_time=1.0):
     """
     Visualizes keypoints in CARLA using the DebugHelper.
     
@@ -85,3 +85,48 @@ def visualize_keypoints_in_carla(client, keypoints, life_time=5.0):
     for point in keypoints:
         location = carla.Location(x=point[0], y=point[1], z=point[2])
         debug.draw_point(location, size=0.05, color=carla.Color(0, 0, 255), life_time=life_time)
+
+def visualize_pose_graph_in_carla(pose_graph, carla_world, initial_x=0.0, initial_y=0.0, initial_z=0.0):
+    """
+    Visualizes the pose graph in the CARLA simulator with an initial offset.
+    
+    Args:
+        pose_graph (networkx.DiGraph): The pose graph containing the poses.
+        carla_world (carla.World): The CARLA world instance.
+        initial_x (float): The initial x-coordinate offset.
+        initial_y (float): The initial y-coordinate offset.
+        initial_z (float): The initial z-coordinate offset.
+    """
+    # Iterate over the nodes and draw them as points
+    for node_index in pose_graph.nodes:
+        pose = pose_graph.nodes[node_index]['pose']
+        
+        # Extract the (x, y, z) translation from the 4x4 transformation matrix
+        x, y, z = pose[0, 3] + initial_x, pose[1, 3] + initial_y, pose[2, 3] + initial_z
+        
+        # Draw a point at this location in CARLA
+        carla_world.debug.draw_point(
+            carla.Location(x=x, y=y, z=z),
+            size=0.1,  
+            color=carla.Color(255, 255, 255), 
+            life_time=5.0 
+        )
+
+    # Iterate over the edges and draw lines between connected nodes
+    for edge in pose_graph.edges:
+        start_index, end_index = edge
+        start_pose = pose_graph.nodes[start_index]['pose']
+        end_pose = pose_graph.nodes[end_index]['pose']
+
+        # Extract the (x, y, z) translations from the 4x4 transformation matrices
+        start_x, start_y, start_z = start_pose[0, 3] + initial_x, start_pose[1, 3] + initial_y, start_pose[2, 3] + initial_z
+        end_x, end_y, end_z = end_pose[0, 3] + initial_x, end_pose[1, 3] + initial_y, end_pose[2, 3] + initial_z
+
+        # Draw a line between the two points in CARLA
+        carla_world.debug.draw_line(
+            carla.Location(x=start_x, y=start_y, z=start_z),
+            carla.Location(x=end_x, y=end_y, z=end_z),
+            thickness=0.05,  
+            color=carla.Color(0, 255, 0),  
+            life_time=5.0 
+        )
