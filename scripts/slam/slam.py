@@ -358,7 +358,7 @@ class SLAM:
 
         # Apply ICP to find the transformation between the previous and current frames
 
-        # point2point
+        #! point2point
         icp_result = o3d.pipelines.registration.registration_icp(
             source=current_frame,
             target=previous_frame,
@@ -367,7 +367,7 @@ class SLAM:
             estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
         )
 
-        # point2plane
+        #! point2plane
         # current_frame.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
         # previous_frame.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
 
@@ -379,8 +379,8 @@ class SLAM:
         #     estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPlane()
         # )
 
-        print("Fitness score:", icp_result.fitness)
-        print("Inlier RMSE:", icp_result.inlier_rmse)
+        # print("Fitness score:", icp_result.fitness)
+        # print("Inlier RMSE:", icp_result.inlier_rmse)
 
         # Extract the transformation matrix from the ICP result
         relative_transformation = icp_result.transformation

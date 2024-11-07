@@ -50,7 +50,7 @@ class PointCloudData:
     #     return point_cloud_o3d
         
 
-    def get_open3d_point_cloud(self, distance_threshold):
+    def get_open3d_point_cloud(self, distance_threshold = -5.0):
         # Check if the point cloud is empty
         if len(self.point_cloud) == 0:
             return None

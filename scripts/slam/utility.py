@@ -9,7 +9,7 @@ def save_point_cloud_data(point_cloud_data, file_index, output_directory="point_
     pcd = o3d.geometry.PointCloud()
     
 
-    new_pcd = point_cloud_data.get_open3d_point_cloud(-1.0)
+    new_pcd = point_cloud_data.get_open3d_point_cloud()
     if new_pcd is not None:
         pcd.points = new_pcd.points
 
@@ -26,7 +26,7 @@ def save_point_cloud_data2(point_cloud_data, start_time, current_time, file_inde
     pcd = o3d.geometry.PointCloud()
     
 
-    new_pcd = point_cloud_data.get_open3d_point_cloud(0.1)
+    new_pcd = point_cloud_data.get_open3d_point_cloud()
     if new_pcd is not None:
         pcd.points = new_pcd.points
 
@@ -84,7 +84,7 @@ def visualize_keypoints_in_carla(client, keypoints, life_time=1.0):
 
     for point in keypoints:
         location = carla.Location(x=point[0], y=point[1], z=point[2])
-        debug.draw_point(location, size=0.05, color=carla.Color(0, 0, 255), life_time=life_time)
+        debug.draw_point(location, size=0.1, color=carla.Color(0, 0, 255), life_time=life_time)
 
 def visualize_pose_graph_in_carla(pose_graph, carla_world, initial_x=0.0, initial_y=0.0, initial_z=0.0):
     """
@@ -130,3 +130,17 @@ def visualize_pose_graph_in_carla(pose_graph, carla_world, initial_x=0.0, initia
             color=carla.Color(0, 255, 0),  
             life_time=5.0 
         )
+
+def set_vehicle_velocity(vehicle, target_velocity):
+    current_velocity = vehicle.get_velocity()
+    current_speed = (current_velocity.x**2 + current_velocity.y**2 + current_velocity.z**2) ** 0.5
+    
+    # Apply throttle if below target velocity, otherwise set to zero
+    control = carla.VehicleControl()
+    if current_speed < target_velocity:
+        control.throttle = 0.5  # Adjust throttle to control acceleration
+    else:
+        control.throttle = 0.0
+    
+    # Update the vehicle control
+    vehicle.apply_control(control)

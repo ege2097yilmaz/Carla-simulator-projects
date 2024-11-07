@@ -8,7 +8,7 @@ from collections import deque
 
 # Set the rolling window size
 pose_history = deque(maxlen=10)
-
+vehicle_max_velocity = 3
 
 def main():
     # Initialize CARLA client and load the world
@@ -40,6 +40,10 @@ def main():
     rotation = transform.rotation
     spectator.set_transform(carla.Transform(location + carla.Location(z=10), rotation)) 
 
+    # Set maxiumum velocity of the car
+    traffic_manager = client.get_trafficmanager()
+    traffic_manager.vehicle_percentage_speed_difference(vehicle, (1 - (vehicle_max_velocity / 13.89)) * 100)
+
     # initialize SLAM class
     slam_system = SLAM()
 
@@ -50,7 +54,7 @@ def main():
     try:
         while True:
             # Retrieve the first frame of point cloud data from CARLA
-            points_frame_1 = point_cloud_data.get_open3d_point_cloud(-1.0)
+            points_frame_1 = point_cloud_data.get_open3d_point_cloud(-2.0)
             
             if points_frame_1 is not None:
                 # print(len(points_frame_1.points))
@@ -71,9 +75,9 @@ def main():
                     visualize_pose_graph_in_carla(pose_graph, world, location.x, location.y)
 
                     # visualize visual odometry points
-                    # estimated_poses = slam_system.get_estimated_poses()
-                    # for pose in estimated_poses:
-                    #     pose_history.append(pose)
+                    estimated_poses = slam_system.get_estimated_poses()
+                    for pose in estimated_poses:
+                        pose_history.append(pose)
 
                     for pose in pose_history:
                         point_cloud_data.visualize_pose_in_carla(world, pose)
