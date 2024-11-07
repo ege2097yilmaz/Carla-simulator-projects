@@ -130,17 +130,3 @@ def visualize_pose_graph_in_carla(pose_graph, carla_world, initial_x=0.0, initia
             color=carla.Color(0, 255, 0),  
             life_time=5.0 
         )
-
-def set_vehicle_velocity(vehicle, target_velocity):
-    current_velocity = vehicle.get_velocity()
-    current_speed = (current_velocity.x**2 + current_velocity.y**2 + current_velocity.z**2) ** 0.5
-    
-    # Apply throttle if below target velocity, otherwise set to zero
-    control = carla.VehicleControl()
-    if current_speed < target_velocity:
-        control.throttle = 0.5  # Adjust throttle to control acceleration
-    else:
-        control.throttle = 0.0
-    
-    # Update the vehicle control
-    vehicle.apply_control(control)

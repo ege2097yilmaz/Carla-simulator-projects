@@ -45,11 +45,11 @@ def main():
     traffic_manager.vehicle_percentage_speed_difference(vehicle, (1 - (vehicle_max_velocity / 13.89)) * 100)
 
     # initialize SLAM class
-    slam_system = SLAM()
+    slam_system = SLAM(optimization_interval=10, pcd_filename="real_time_map.pcd")
 
     slam_system.set_initial_point(location.x, location.y)
 
-    file_index = 0
+    # file_index = 0
 
     try:
         while True:
@@ -62,9 +62,11 @@ def main():
                     world.tick()
 
                     transform = vehicle.get_transform()
-                    slam_system.build_graph(points_frame_1, transform.rotation.yaw)
-                    slam_system.optimize_graph()
+                    slam_system.build_graph(points_frame_1, transform.rotation.yaw) # SLAM main function to run it
 
+
+
+                    """ Carla visualiztion functions """
                     # visualize keypoints
                     keypoints = slam_system.get_keypoints(transform.location.x, transform.location.y, transform.rotation.yaw)
                     visualize_keypoints_in_carla(client, keypoints)

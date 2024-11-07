@@ -6,7 +6,7 @@ from utility import *
 import gtsam
 
 class SLAM:
-    def __init__(self):
+    def __init__(self, optimization_interval=10,  pcd_filename="real_time_map.pcd"):
         # Initialize key variables for storing keypoints and LiDAR scans
         self.keypoints = []
         self.lidar_scans = []
@@ -21,6 +21,10 @@ class SLAM:
         self.cumulative_y_translation = 0
 
         self.loop_closure_distance_threshold = 5.0  # Threshold in meters for loop closure
+
+        self.optimization_interval = optimization_interval  # Frames between optimizations
+        self.map_point_cloud = o3d.geometry.PointCloud()
+        self.pcd_filename = pcd_filename
 
     
     def get_keypoints(self, vehicle_x, vehicle_y, vehicle_yaw):
@@ -295,6 +299,13 @@ class SLAM:
             # Perform loop closure detection
             self.detect_and_add_loop_closure(points_frame)
 
+            self.incremental_map_update(points_np, relative_transformation)
+
+            if self.node_index % self.optimization_interval == 0:
+                self.optimize_graph()
+                self.update_map_with_optimized_poses()
+                self.save_map_to_pcd()
+
         # Increment the node index
         self.node_index += 1
 
@@ -420,7 +431,7 @@ class SLAM:
             icp_result = o3d.pipelines.registration.registration_icp(
                 source=current_frame,
                 target=previous_frame,
-                max_correspondence_distance=20.0,
+                max_correspondence_distance=10.0,
                 init=np.eye(4),
                 estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
             )
@@ -449,7 +460,7 @@ class SLAM:
 
             # Add a prior factor to the first pose to anchor the graph
             if node_index == 0:
-                prior_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6) * 1e-6)
+                prior_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6) * 0.01)
                 graph.add(gtsam.PriorFactorPose3(node_index, gtsam_pose, prior_model))
 
         # Add all edges (relative transformations) to the graph
@@ -479,3 +490,57 @@ class SLAM:
         print("Final Error:", final_error)
 
         print("Graph optimization complete.")
+
+    def construct_map(self):
+        """
+        Constructs a map by transforming and merging all LiDAR scans using the optimized poses.
+        Returns:
+            o3d.geometry.PointCloud: The constructed 3D map as an Open3D point cloud.
+        """
+        map_point_cloud = o3d.geometry.PointCloud()
+
+        for node_index in self.pose_graph.nodes:
+            # Get the optimized pose for this node
+            pose_matrix = self.pose_graph.nodes[node_index]['pose']
+
+            # Transform the corresponding LiDAR scan to the global coordinate frame
+            scan_points = self.lidar_scans[node_index]
+            scan_point_cloud = o3d.geometry.PointCloud()
+            scan_point_cloud.points = o3d.utility.Vector3dVector(scan_points)
+
+            # Apply the transformation to the scan points
+            scan_point_cloud.transform(pose_matrix)
+
+            # Merge the transformed scan into the map
+            map_point_cloud += scan_point_cloud
+
+        # Optionally, you can down-sample the map to reduce the number of points
+        map_point_cloud = map_point_cloud.voxel_down_sample(voxel_size=0.1)
+
+        print("Map construction complete.")
+        return map_point_cloud
+
+    def incremental_map_update(self, points_np, transformation):
+        current_scan = o3d.geometry.PointCloud()
+        current_scan.points = o3d.utility.Vector3dVector(points_np)
+        current_scan.transform(np.dot(self.current_pose, transformation))  # Apply global transformation
+        self.map_point_cloud += current_scan  # Add to the incremental map
+
+    def update_map_with_optimized_poses(self):
+        self.map_point_cloud.clear()
+        for node_index in self.pose_graph.nodes:
+            pose_matrix = self.pose_graph.nodes[node_index]['pose']
+            scan_points = self.lidar_scans[node_index]
+            scan_point_cloud = o3d.geometry.PointCloud()
+            scan_point_cloud.points = o3d.utility.Vector3dVector(scan_points)
+            scan_point_cloud.transform(pose_matrix)
+            self.map_point_cloud += scan_point_cloud
+        self.map_point_cloud = self.map_point_cloud.voxel_down_sample(voxel_size=0.1)
+        print("Map updated with optimized poses.")
+
+    def save_map_to_pcd(self):
+        """
+        Saves the current map to a PCD file, overwriting it each time.
+        """
+        o3d.io.write_point_cloud(self.pcd_filename, self.map_point_cloud)
+        print(f"Map saved to {self.pcd_filename}.")

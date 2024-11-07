@@ -1,2 +1,3 @@
 build/
 scripts/slam/__pycache__/
+scripts/slam/real_time_map.pcd
