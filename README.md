@@ -11,6 +11,7 @@ This CMake package integrates `libcarla`, `rpclib`, and custom control algorithm
   - **PID Controller**: A classical control algorithm for managing vehicle dynamics.
   - **MPC Controller**: A Model Predictive Controller for optimizing vehicle performance over a prediction horizon.
   - **Cruise control**: A controller to follow lead car in simulation.
+  - **SLAM**: A slam project that localizes the vehicle using visul odometry (pointcloud matchin with ICP) and creates a map with pointcloud datas.
 
 ## Installation
 
