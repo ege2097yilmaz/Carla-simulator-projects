@@ -439,7 +439,8 @@ class SLAM:
                 estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
             )
 
-            if icp_result.fitness > 0.9:  # If ICP fitness is high enough, we have a loop closure
+            # If ICP fitness is high enough, we have a loop closure
+            if icp_result.fitness > 0.9 and self._validate_loop_closure(icp_result.transformation):  
                 loop_closure_transformation = icp_result.transformation
                 self.pose_graph.add_edge(self.node_index, i, transformation=loop_closure_transformation)
                 print(f"Loop closure detected and edge added between node {self.node_index} and node {i}.")
@@ -547,3 +548,26 @@ class SLAM:
         """
         o3d.io.write_point_cloud(self.pcd_filename, self.map_point_cloud)
         print(f"Map saved to {self.pcd_filename}.")
+
+    def _validate_loop_closure(self, transformation):
+        """
+        Validates the loop closure by checking the geometric consistency of the transformation.
+        Args:
+            transformation (np.ndarray): The transformation matrix for the loop closure.
+        Returns:
+            bool: True if the loop closure is valid, False otherwise.
+        """
+        rotation = transformation[:3, :3]
+        translation = transformation[:3, 3]
+
+        # Check rotation consistency
+        if not np.isclose(np.linalg.det(rotation), 1.0, atol=1e-3):
+            print("Invalid loop closure: Rotation matrix is not valid.")
+            return False
+
+        # Check translation magnitude
+        if np.linalg.norm(translation) > self.loop_closure_distance_threshold:
+            print("Invalid loop closure: Translation magnitude is too large.")
+            return False
+
+        return True
