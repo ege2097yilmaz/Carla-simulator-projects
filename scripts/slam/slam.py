@@ -405,25 +405,37 @@ class SLAM:
 
         return relative_transformation
     
-    # TODO include place recognition algorithms like Scan Context or using geometric consistency checks with previously visited areas
+    """ TODO
+    include place recognition algorithms like Scan Context 
+    or using geometric consistency checks with previously visited areas
+    """
     def detect_and_add_loop_closure(self, current_frame):
         """
         Detects loop closure by comparing the current scan to earlier scans and adds an edge if a match is found.
         Args:
             current_frame (o3d.geometry.PointCloud): The current point cloud frame.
         """
+        # Set all z-coordinates of current frame to zero
+        current_points = np.asarray(current_frame.points)
+        current_points[:, 2] = 0
+        current_frame.points = o3d.utility.Vector3dVector(current_points)
+
         current_position = self.current_pose[:3, 3]  # Extract the translation component of the current pose
+        current_position[2] = 0  # Set z-component to zero for 2D loop closure detection
 
         for i in range(self.node_index - 10):  # Skip the most recent scans to avoid redundant matching
             previous_pose = self.pose_graph.nodes[i]['pose']
-            previous_position = previous_pose[:3, 3]  
+            previous_position = previous_pose[:3, 3]
+            previous_position[2] = 0  # Set z-component to zero
 
-            # Compute the Euclidean distance between the current and previous positions
-            distance = np.linalg.norm(current_position - previous_position)
+            # Compute the Euclidean distance in 2D
+            distance = np.linalg.norm(current_position[:2] - previous_position[:2])
             if distance > self.loop_closure_distance_threshold:
                 continue  # Skip if the distance is greater than the threshold
 
+            # Load and set z-coordinates of previous frame to zero
             previous_frame_np = self.lidar_scans[i]
+            previous_frame_np[:, 2] = 0  # Set all z-coordinates to zero
             previous_frame = o3d.geometry.PointCloud()
             previous_frame.points = o3d.utility.Vector3dVector(previous_frame_np)
 
@@ -431,13 +443,16 @@ class SLAM:
             icp_result = o3d.pipelines.registration.registration_icp(
                 source=current_frame,
                 target=previous_frame,
-                max_correspondence_distance=10.0,
+                max_correspondence_distance=5.0,
                 init=np.eye(4),
                 estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
             )
 
             if icp_result.fitness > 0.9:  # If ICP fitness is high enough, we have a loop closure
                 loop_closure_transformation = icp_result.transformation
+                loop_closure_transformation[2, :] = [0, 0, 1, 0]
+                loop_closure_transformation[:, 2] = [0, 0, 1, 0]
+
                 self.pose_graph.add_edge(self.node_index, i, transformation=loop_closure_transformation)
                 print(f"Loop closure detected and edge added between node {self.node_index} and node {i}.")
 
