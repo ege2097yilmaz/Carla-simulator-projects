@@ -302,7 +302,7 @@ class SLAM:
             self.incremental_map_update(points_np, relative_transformation)
 
             if self.node_index % self.optimization_interval == 0:
-                self.optimize_graph()
+                self.optimize_graph_v2()
                 self.update_map_with_optimized_poses()
                 self.save_map_to_pcd()
 
@@ -405,6 +405,7 @@ class SLAM:
 
         return relative_transformation
     
+
     """ TODO
     include place recognition algorithms like Scan Context 
     or using geometric consistency checks with previously visited areas
@@ -445,7 +446,8 @@ class SLAM:
                 self.pose_graph.add_edge(self.node_index, i, transformation=loop_closure_transformation)
                 print(f"Loop closure detected and edge added between node {self.node_index} and node {i}.")
     
-    def optimize_graph(self):
+
+    def optimize_graph_v1(self):
         """
         Optimizes the pose graph to minimize the overall error from all constraints (edges) using GTSAM,
         without considering the z-direction.
@@ -495,6 +497,56 @@ class SLAM:
 
         print("Graph optimization complete.")
 
+    def optimize_graph_v2(self):
+        """
+        Optimizes the pose graph to minimize the overall error from all constraints (edges).
+        """
+        graph = gtsam.NonlinearFactorGraph()
+        initial_estimate = gtsam.Values()
+
+        # Add all nodes (poses) to the graph
+        for node_index in self.pose_graph.nodes:
+            pose = self.pose_graph.nodes[node_index]['pose']
+            translation = pose[:3, 3]
+            rotation = pose[:3, :3]
+            gtsam_pose = gtsam.Pose3(gtsam.Rot3(rotation), gtsam.Point3(translation))
+            initial_estimate.insert(node_index, gtsam_pose)
+
+            # Add a prior factor to the first pose to anchor the graph
+            if node_index == 0:
+                prior_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6) * 1e-6)
+                graph.add(gtsam.PriorFactorPose3(node_index, gtsam_pose, prior_model))
+
+        # Add all edges (relative transformations) to the graph
+        for edge in self.pose_graph.edges:
+            source, target = edge
+            relative_transformation = self.pose_graph.edges[edge]['transformation']
+            translation = relative_transformation[:3, 3]
+            rotation = relative_transformation[:3, :3]
+            gtsam_relative_pose = gtsam.Pose3(gtsam.Rot3(rotation), gtsam.Point3(translation))
+
+            # Use robust noise model for loop closures
+            if abs(target - source) > 1:
+                robust_noise_model = gtsam.noiseModel.Robust.Create(
+                    gtsam.noiseModel.mEstimator.Huber(1.0),  # Robust kernel
+                    gtsam.noiseModel.Diagonal.Variances(np.ones(6) * 0.01)
+                )
+                graph.add(gtsam.BetweenFactorPose3(source, target, gtsam_relative_pose, robust_noise_model))
+            else:
+                noise_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6))
+                graph.add(gtsam.BetweenFactorPose3(source, target, gtsam_relative_pose, noise_model))
+
+        # Optimize the graph
+        optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initial_estimate)
+        result = optimizer.optimize()
+
+        # Update the poses in the graph with the optimized values
+        for node_index in self.pose_graph.nodes:
+            optimized_pose = result.atPose3(node_index)
+            self.pose_graph.nodes[node_index]['pose'] = optimized_pose.matrix()
+
+        print("Graph optimization complete.")
+
     def construct_map(self):
         """
         Constructs a map by transforming and merging all LiDAR scans using the optimized poses.
@@ -524,11 +576,13 @@ class SLAM:
         print("Map construction complete.")
         return map_point_cloud
 
+
     def incremental_map_update(self, points_np, transformation):
         current_scan = o3d.geometry.PointCloud()
         current_scan.points = o3d.utility.Vector3dVector(points_np)
         current_scan.transform(np.dot(self.current_pose, transformation))  # Apply global transformation
         self.map_point_cloud += current_scan  # Add to the incremental map
+
 
     def update_map_with_optimized_poses(self):
         self.map_point_cloud.clear()
@@ -542,12 +596,14 @@ class SLAM:
         self.map_point_cloud = self.map_point_cloud.voxel_down_sample(voxel_size=0.1)
         print("Map updated with optimized poses.")
 
+
     def save_map_to_pcd(self):
         """
         Saves the current map to a PCD file, overwriting it each time.
         """
         o3d.io.write_point_cloud(self.pcd_filename, self.map_point_cloud)
         print(f"Map saved to {self.pcd_filename}.")
+
 
     def _validate_loop_closure(self, transformation):
         """
