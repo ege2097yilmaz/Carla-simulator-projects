@@ -11,13 +11,13 @@ docker build -t carla-gui-gpu .
 
 If you want to delete the container after each runuse this
 ```bash
-docker run -it --privileged  --gpus all   --network host  --rm -e DISPLAY=$DISPLAY   -v /tmp/.X11-unix:/tmp/.X11-unix carla0.9.9_image
+docker run -it --privileged  --gpus all   --network host  --rm -e DISPLAY=$DISPLAY   -v /tmp/.X11-unix:/tmp/.X11-unix carla-gui-gpu
 ```
 
 
 ıf you do not want to delete use this command
 ```bash
-docker run -it --privileged  --gpus all   --network host   -e DISPLAY=$DISPLAY   -v /tmp/.X11-unix:/tmp/.X11-unix carla0.9.9_image
+docker run -it --privileged  --gpus all   --network host   -e DISPLAY=$DISPLAY   -v /tmp/.X11-unix:/tmp/.X11-unix carla-gui-gpu
 ```
 
 ## 2. Go into the container
@@ -41,7 +41,7 @@ Make sure you link to the libcarla library and include the appropriate headers i
 
 In terminal
 ```bash
-docker run -it --privileged --user root --gpus all   --network host  --rm -e DISPLAY=$DISPLAY   -v /tmp/.X11-unix:/tmp/.X11-unix carla0.9.9_image
+docker run -it --privileged --user root --gpus all   --network host  --rm -e DISPLAY=$DISPLAY   -v /tmp/.X11-unix:/tmp/.X11-unix carla-gui-gpu
 
 cd /path/to/the/API # where you want to build th API
 
