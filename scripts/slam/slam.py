@@ -7,7 +7,6 @@ import gtsam
 
 class SLAM:
     def __init__(self, optimization_interval=10,  pcd_filename="real_time_map.pcd"):
-        # Initialize key variables for storing keypoints and LiDAR scans
         self.keypoints = []
         self.lidar_scans = []
         self.estimated_poses = [] 
@@ -17,12 +16,30 @@ class SLAM:
         self.node_index = 0
         self.vis_keypoints = []
 
+        # set parameters
+        self.oktree_radius = 0.1
+        self.oktree_max_mn = 30
+
+        self.segment_distance_threshold = 0.01
+        self.segment_ransac_n = 3
+        self.segment_num_iterations = 1000
+
+        self.feature_neighborhood_size = 4
+
+        self.loop_closure_distance_threshold = 5.0 
+
+        self.node_variances = np.ones(6) * 1e-6
+        self.edge_variances = np.ones(6) * 0.01
+
+        self.loop_closure_correspendence_distance = 10.0
+        self.relative_motion_correspendence_distance = 5.0
+
+        self.loop_closure_node_window = 10
+
         self.cumulative_x_translation = 0 
         self.cumulative_y_translation = 0
 
-        self.loop_closure_distance_threshold = 5.0  # Threshold in meters for loop closure
-
-        self.optimization_interval = optimization_interval  # Frames between optimizations
+        self.optimization_interval = optimization_interval 
         self.map_point_cloud = o3d.geometry.PointCloud()
         self.pcd_filename = pcd_filename
 
@@ -38,7 +55,6 @@ class SLAM:
             # Apply the rotation matrix to the (x, y) coordinates
             rotated_point = np.dot(rotation_matrix, np.array([point[0], point[1]]))
             
-            # Update the point with the rotated and translated coordinates
             point[0] = rotated_point[0] + vehicle_x
             point[1] = rotated_point[1] + vehicle_y
 
@@ -64,24 +80,23 @@ class SLAM:
         self.cumulative_x_translation = x
         self.cumulative_y_translation = y
 
-    # def process_frame(self, points_frame):
-    #     """
-    #     Processes a frame of point cloud data from CARLA.
-    #     Args:
-    #         points_frame (o3d.geometry.PointCloud): The point cloud frame from CARLA.
-    #     """
-    #     points_np = np.asarray(points_frame.points)
+    def process_frame(self, points_frame):
+        """
+        Processes a frame of point cloud data from CARLA.
+        Args:
+            points_frame (o3d.geometry.PointCloud): The point cloud frame from CARLA.
+        """
+        points_np = np.asarray(points_frame.points)
 
-    #     # Extract keypoints using feature extraction methods
-    #     keypoints = self.extract_keypoints(points_np, method='corner_and_plane')
+        keypoints = self.extract_keypoints(points_np, method='corner_and_plane')
 
-    #     self.lidar_scans.append(points_np)
-    #     self.keypoints.append(keypoints)
+        self.lidar_scans.append(points_np)
+        self.keypoints.append(keypoints)
 
-    #     self.data_association(points_np, keypoints)
+        self.data_association(points_np, keypoints)
 
-    #     relative_transformation = np.eye(4)  
-    #     self.add_pose_to_graph(relative_transformation)
+        relative_transformation = np.eye(4)  
+        self.add_pose_to_graph(relative_transformation)
 
 
 
@@ -95,7 +110,6 @@ class SLAM:
             keypoints (np.ndarray): Extracted keypoints from the scan.
         """
         if method == 'corner_and_plane':
-            # Extract corner and plane features using PCA
             keypoints = self._extract_corner_and_plane_features(scan, 1e-15, 0.2) # deprecated function 1e-15, 0.9
             # keypoints = self._extract_features(scan)
             self.vis_keypoints = keypoints
@@ -119,42 +133,29 @@ class SLAM:
         point_cloud = o3d.geometry.PointCloud()
         point_cloud.points = o3d.utility.Vector3dVector(scan)
 
-        # Estimate normals for the point cloud
-        point_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+        point_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=self.oktree_radius, max_nn=self.oktree_max_mn))
 
         # Perform plane segmentation using RANSAC
-        plane_model, inliers = point_cloud.segment_plane(distance_threshold=0.01, ransac_n=3, num_iterations=1000)
+        plane_model, inliers = point_cloud.segment_plane(distance_threshold=self.segment_distance_threshold, ransac_n=self.segment_ransac_n, num_iterations=self.segment_num_iterations)
         
-        # Extract inlier points representing the plane
         plane_cloud = point_cloud.select_by_index(inliers)
         non_plane_cloud = point_cloud.select_by_index(inliers, invert=True)
 
-        # Analyze non-plane points for corner features
-        # Using the concept of curvature to detect keypoints
         non_plane_points = np.asarray(non_plane_cloud.points)
         keypoints = []
 
-        # Loop through each point in the non-plane cloud to calculate curvature
         kdtree = o3d.geometry.KDTreeFlann(non_plane_cloud)
         for i in range(len(non_plane_points)):
-            # Find the neighbors within a radius
             [_, idx, _] = kdtree.search_radius_vector_3d(non_plane_points[i], 0.1)
             if len(idx) < 5:
                 continue
-            
-            # Compute the covariance matrix of the neighborhood
             neighbors = np.asarray(non_plane_cloud.points)[idx, :]
             covariance_matrix = np.cov(neighbors, rowvar=False)
             
-            # Compute eigenvalues to analyze curvature
             eigenvalues = np.linalg.eigvalsh(covariance_matrix)
             curvature = eigenvalues[0] / np.sum(eigenvalues)
-            
-            # Use a threshold to detect keypoints based on curvature
             if curvature > 0.1:
                 keypoints.append(non_plane_points[i])
-
-        # Convert keypoints list to a numpy array
         keypoints = np.array(keypoints)
 
         if keypoints.size == 0:
@@ -176,13 +177,12 @@ class SLAM:
             keypoints (np.ndarray): Keypoints representing corners and planes.
         """
         keypoints = []
-        neighborhood_size = 4
 
         kdtree = KDTree(scan)
         for point in scan:
             # Find neighbors using KD-Tree
-            neighborhood_size = min(neighborhood_size, len(scan))
-            indices = kdtree.query([point], k=neighborhood_size, return_distance=False)[0]
+            self.feature_neighborhood_size = min(self.feature_neighborhood_size, len(scan))
+            indices = kdtree.query([point], k=self.feature_neighborhood_size, return_distance=False)[0]
             neighbors = scan[indices]
 
             cov_matrix = np.cov(neighbors, rowvar=False)
@@ -281,16 +281,12 @@ class SLAM:
             # Initialize the graph if this is the first frame
             self.initialize_pose_graph()
 
-            # self.estimated_poses.append(np.eye(4))
             self.estimated_poses.append(self.cumulative_transformation)
         else:
             # Estimate the relative transformation between the current and previous scan
             relative_transformation = self.estimate_relative_transformation(points_frame)
 
             self.cumulative_transformation = self.update_cumulative_transformation(relative_transformation[0, 3], relative_transformation[1, 3], heading)
-
-            # print("Cumulative Transformation Matrix:")
-            # print(self.cumulative_transformation)
 
             self.estimated_poses.append(self.cumulative_transformation)
 
@@ -306,7 +302,6 @@ class SLAM:
                 self.update_map_with_optimized_poses()
                 self.save_map_to_pcd()
 
-        # Increment the node index
         self.node_index += 1
 
 
@@ -367,13 +362,11 @@ class SLAM:
         previous_frame = o3d.geometry.PointCloud()
         previous_frame.points = o3d.utility.Vector3dVector(previous_frame_np)
 
-        # Apply ICP to find the transformation between the previous and current frames
-
         #! point2point
         icp_result = o3d.pipelines.registration.registration_icp(
             source=current_frame,
             target=previous_frame,
-            max_correspondence_distance=5.0, 
+            max_correspondence_distance=self.relative_motion_correspendence_distance, 
             init=np.eye(4),  
             estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
         )
@@ -418,7 +411,7 @@ class SLAM:
         """
         current_position = self.current_pose[:3, 3]  # Extract the translation component of the current pose
 
-        for i in range(self.node_index - 10):  # Skip the most recent scans to avoid redundant matching
+        for i in range(self.node_index - self.loop_closure_node_window):  # Skip the most recent scans to avoid redundant matching
             previous_pose = self.pose_graph.nodes[i]['pose']
             previous_position = previous_pose[:3, 3]  
 
@@ -435,7 +428,7 @@ class SLAM:
             icp_result = o3d.pipelines.registration.registration_icp(
                 source=current_frame,
                 target=previous_frame,
-                max_correspondence_distance=10.0,
+                max_correspondence_distance=self.loop_closure_correspendence_distance,
                 init=np.eye(4),
                 estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint()
             )
@@ -464,13 +457,11 @@ class SLAM:
             gtsam_pose = gtsam.Pose3(gtsam.Rot3(rotation), gtsam.Point3(translation[0], translation[1], 0))
             initial_estimate.insert(node_index, gtsam_pose)
 
-            # Add a prior factor to the first pose to anchor the graph
             if node_index == 0:
                 prior_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6) * 0.01)
                 graph.add(gtsam.PriorFactorPose3(node_index, gtsam_pose, prior_model))
 
-        # Add all edges (relative transformations) to the graph
-        noise_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6))  # Adjust noise model as needed
+        noise_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6) * 0.01) 
         for edge in self.pose_graph.edges:
             source, target = edge
             relative_transformation = self.pose_graph.edges[edge]['transformation']
@@ -514,7 +505,7 @@ class SLAM:
 
             # Add a prior factor to the first pose to anchor the graph
             if node_index == 0:
-                prior_model = gtsam.noiseModel.Diagonal.Variances(np.ones(6) * 1e-6)
+                prior_model = gtsam.noiseModel.Diagonal.Variances(self.node_variances)
                 graph.add(gtsam.PriorFactorPose3(node_index, gtsam_pose, prior_model))
 
         # Add all edges (relative transformations) to the graph
@@ -528,8 +519,8 @@ class SLAM:
             # Use robust noise model for loop closures
             if abs(target - source) > 1:
                 robust_noise_model = gtsam.noiseModel.Robust.Create(
-                    gtsam.noiseModel.mEstimator.Huber(1.0),  # Robust kernel
-                    gtsam.noiseModel.Diagonal.Variances(np.ones(6) * 0.01)
+                    gtsam.noiseModel.mEstimator.Huber(1.0),
+                    gtsam.noiseModel.Diagonal.Variances(self.edge_variances)
                 )
                 graph.add(gtsam.BetweenFactorPose3(source, target, gtsam_relative_pose, robust_noise_model))
             else:
@@ -545,7 +536,7 @@ class SLAM:
             optimized_pose = result.atPose3(node_index)
             self.pose_graph.nodes[node_index]['pose'] = optimized_pose.matrix()
 
-        print("Graph optimization complete.")
+        # print("Graph optimization complete.")
 
     def construct_map(self):
         """
@@ -567,10 +558,10 @@ class SLAM:
             # Apply the transformation to the scan points
             scan_point_cloud.transform(pose_matrix)
 
-            # Merge the transformed scan into the map
+            # Merge the map
             map_point_cloud += scan_point_cloud
 
-        # Optionally, you can down-sample the map to reduce the number of points
+        # down-sample the map to reduce the number of points
         map_point_cloud = map_point_cloud.voxel_down_sample(voxel_size=0.1)
 
         print("Map construction complete.")
