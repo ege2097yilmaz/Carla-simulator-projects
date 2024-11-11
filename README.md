@@ -33,3 +33,14 @@ To build and install this package, follow these steps:
 
 ### PID controller to follow path
 ![Watch Video](videos/PID.gif)
+
+### SLAM implementation to localize the vehicle and mapping enviroment where robot moves
+![Watch Video](videos/slam.gif)
+
+### Mapping outputs
+<img src="images/slam4.png" alt="slam4" width="800">
+
+<img src="images/slam5.png" alt="slam5" width="800">
+
+
+<img src="images/slam_all_map.png" alt="slam_all_map" width="800">
