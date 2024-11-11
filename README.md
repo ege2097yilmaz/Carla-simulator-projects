@@ -34,6 +34,10 @@ To build and install this package, follow these steps:
 ### PID controller to follow path
 ![Watch Video](videos/PID.gif)
 
+
+### MPC controller to follow path
+![Watch Video](videos/mpc.gif)
+
 ### SLAM implementation to localize the vehicle and mapping enviroment where robot moves
 ![Watch Video](videos/slam.gif)
 
