@@ -38,7 +38,7 @@ def main():
     # Spawn a vehicle
     blueprint_library = world.get_blueprint_library()
     vehicle_bp = blueprint_library.filter('vehicle.*')[0]
-    spawn_point = world.get_map().get_spawn_points()[0]
+    spawn_point = world.get_map().get_spawn_points()[3]
     vehicle = world.spawn_actor(vehicle_bp, spawn_point)
     print("Vehicle spawned.")
 
@@ -50,6 +50,22 @@ def main():
     camera_transform = carla.Transform(carla.Location(x=1.5, z=2.4)) 
     camera = world.spawn_actor(camera_bp, camera_transform, attach_to=vehicle)
     print("Camera attached.")
+
+    # Attach an IMU sensor
+    imu_bp = blueprint_library.find('sensor.other.imu')
+    imu_transform = carla.Transform(carla.Location(x=0.0, z=1.0))  # Adjust IMU position
+    imu = world.spawn_actor(imu_bp, imu_transform, attach_to=vehicle)
+    print("IMU attached.")
+
+    # imu.listen(lambda imu_data: print(f"IMU: {imu_data}"))
+
+    # Attach a GNSS sensor
+    gnss_bp = blueprint_library.find('sensor.other.gnss')
+    gnss_transform = carla.Transform(carla.Location(x=0.0, z=2.0))  # Adjust GNSS position
+    gnss = world.spawn_actor(gnss_bp, gnss_transform, attach_to=vehicle)
+    print("GNSS attached.")
+
+    # gnss.listen(lambda gnss_data: print(f"GNSS: Lat={gnss_data.latitude}, Lon={gnss_data.longitude}"))
 
     initial_position = vehicle.get_transform()
     rotation = vehicle.get_transform().rotation
@@ -102,40 +118,50 @@ def main():
     global vo
     vo = VisualOdometry(camera_params)
 
+    def imu_callback(imu_data):
+        # print("processing IMU datas")
+        
+        # Extract IMU readings
+        # accel = np.array([imu_data.accelerometer.x, imu_data.accelerometer.y, imu_data.accelerometer.z])
+        accel = np.array([0, 0, 0]) # ignore accelerations now
+        gyro = np.array([imu_data.gyroscope.x, imu_data.gyroscope.y, imu_data.gyroscope.z * -1])
+        timestamp = imu_data.timestamp
+        vo.process_imu(accel, gyro, timestamp)
+        time.sleep(0.02)
+
     def process_frame(image):
-        try:
-            # xtract the velocity components 
-            velocity_vector = vehicle.get_velocity()
-            velocity_x = velocity_vector.x
-            velocity_y = velocity_vector.y
-            velocity_z = velocity_vector.z
+        # xtract the velocity components 
+        velocity_vector = vehicle.get_velocity()
+        velocity_x = velocity_vector.x
+        velocity_y = velocity_vector.y
+        velocity_z = velocity_vector.z
 
-            # Calculate the speed in m/s
-            speed = (velocity_x**2 + velocity_y**2 + velocity_z**2)**0.5
-            print("vehicle velocity: ")
-            print(speed)
+        # Calculate the speed in m/s
+        speed = (velocity_x**2 + velocity_y**2 + velocity_z**2)**0.5
+        # print("vehicle velocity: ")
+        # print(speed)
 
-            if(speed > 0.3):
-                # Convert raw data to frame
-                array = np.frombuffer(image.raw_data, dtype=np.uint8)
-                frame = array.reshape((image.height, image.width, 4))[:, :, :3]  
-                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR) 
+        if(speed > 0.03):
+            # Convert raw data to frame
+            array = np.frombuffer(image.raw_data, dtype=np.uint8)
+            frame = array.reshape((image.height, image.width, 4))[:, :, :3]  
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR) 
 
-                # Convert frame to grayscale
-                frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Convert frame to grayscale
+            frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                # Process frame using visual odometry
-                pose = vo.process_frame(frame_gray)
-                trajectory = vo.get_trajectory()
+            # Process frame using visual odometry
+            pose = vo.process_frame(frame_gray)
+            trajectory = vo.get_trajectory()
 
-                # Append the last trajectory point to the file
-                with open(trajectory_file, "a") as file:
-                    for point in trajectory[-1:]:
-                        file.write(f"{point[0]} {point[1]} {0.0}\n")
+            # Append the last trajectory point to the file
+            with open(trajectory_file, "a") as file:
+                for point in trajectory[-1:]:
+                    file.write(f"{point[0]} {point[1]} {0.0}\n")
 
-                print("Current Pose:\n", pose)
+            print("Current Pose:\n", pose)
 
-            black_screen = np.zeros((image_width*2, image_height*2, 3), dtype=np.uint8)
+            black_screen = np.zeros((image_width, image_height, 3), dtype=np.uint8)
 
             center_x = black_screen.shape[1] // 2 
             center_y = black_screen.shape[0] // 2  
@@ -149,60 +175,54 @@ def main():
 
                     height, width, _ = black_screen.shape
                     if all(0 <= coord < dim for coord, dim in zip(pt1 + pt2, [width, height] * 2)):
-                        cv2.line(black_screen, tuple(pt1), tuple(pt2), (0, 255, 0), 2)
+                        cv2.line(black_screen, tuple(pt1 ), tuple(pt2), (0, 255, 0), 5)
 
-            # Show visualization
-            cv2.imshow("Visual Odometry", black_screen)
-            if cv2.waitKey(1) == ord('q'):
-                return
-            time.sleep(0.06)
+        # Show visualization
+        # cv2.imshow("Visual Odometry", black_screen)
+        # if cv2.waitKey(1) == ord('q'):
+        #     return
+            
+        time.sleep(0.06)
 
-        except Exception as e:
-            print(f"Error in processing frame: {e}")
-            time.sleep(0.06)
             
             
     
     # camera.listen(lambda image: processImage(camera_bp, image, vehicle))
     camera.listen(lambda image: process_frame(image))
-    
-    # Attach an IMU sensor
-    imu_bp = blueprint_library.find('sensor.other.imu')
-    imu_transform = carla.Transform(carla.Location(x=0.0, z=1.0))  # Adjust IMU position
-    imu = world.spawn_actor(imu_bp, imu_transform, attach_to=vehicle)
-    print("IMU attached.")
-
-    # imu.listen(lambda imu_data: print(f"IMU: {imu_data}"))
-
-    # Attach a GNSS sensor
-    gnss_bp = blueprint_library.find('sensor.other.gnss')
-    gnss_transform = carla.Transform(carla.Location(x=0.0, z=2.0))  # Adjust GNSS position
-    gnss = world.spawn_actor(gnss_bp, gnss_transform, attach_to=vehicle)
-    print("GNSS attached.")
-
-    # gnss.listen(lambda gnss_data: print(f"GNSS: Lat={gnss_data.latitude}, Lon={gnss_data.longitude}"))
+    imu.listen(imu_callback)
 
     # Control the vehicle
     vehicle.set_autopilot(True)
 
     # Set maxiumum velocity of the car
     traffic_manager = client.get_trafficmanager()
-    traffic_manager.vehicle_percentage_speed_difference(vehicle, (1 - (5 / 13.89)) * 100)
+    traffic_manager.vehicle_percentage_speed_difference(vehicle, (1 - (4 / 13.89)) * 100)
 
     index = 0
     time.sleep(1.0)
+
+    start_location = vehicle.get_location()
+
     try:
         print("starting simulation")
         while True:
-            if(45 < index < 450):
-                # print(trajectory)
-                control = carla.VehicleControl()
-                control.steer = np.clip(0.0, -1.0, 1.0) * -1
-                control.throttle = np.clip(0.55, 0.0, 1.0)
-                # vehicle.apply_control(control)
+            current_location = vehicle.get_location()
+            distance_traveled = calculate_distance(start_location, current_location)
+            if distance_traveled >= 250:  
+                print("50 meters reached. Stopping the vehicle.")
+                vehicle.set_autopilot(False) 
+                break
+
+            # control 
+            # if(45 < index < 550):
+            #     # print(trajectory)
+            #     control = carla.VehicleControl()
+            #     control.steer = np.clip(0.0, -1.0, 1.0) * -1
+            #     control.throttle = np.clip(0.55, 0.0, 1.0)
+            #     vehicle.apply_control(control)
                 
-            else:
-                vehicle.apply_control(carla.VehicleControl(throttle=0.0, brake=1.0))
+            # else:
+            #     vehicle.apply_control(carla.VehicleControl(throttle=0.0, brake=1.0))
 
             time.sleep(0.06)
             index +=1

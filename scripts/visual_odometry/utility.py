@@ -4,6 +4,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
+def calculate_distance(loc1, loc2):
+    dx = loc1.x - loc2.x
+    dy = loc1.y - loc2.y
+    dz = loc1.z - loc2.z
+    return math.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+
 class gnsProcess:
     def haversine_distance(self, lat1, lon1, lat2, lon2):
         """
