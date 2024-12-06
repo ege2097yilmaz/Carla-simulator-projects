@@ -96,6 +96,7 @@ $$
 
 **State Discretization**
 The continuous state space 𝑠 ∈ 𝑅<sup>𝑛</sup>​ is discretized into bins. For a given continuous variable 𝑥, its discrete bin index is computed as:
+
 $$
 bin(x)=digitize(x,bins)
 $$
@@ -120,6 +121,7 @@ $$
 **Training Objective**
 
 The goal of the reinforcement learning agent is to learn a policy 𝜋 that maximizes the cumulative discounted reward:
+
 $$
 Gt​ = k=∑γ^kr_{t+k+1}
 $$
